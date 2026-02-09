@@ -269,7 +269,7 @@ exports.createOrder = async (req, res) => {
       const displayOrderId = getOrderDisplayId(savedOrder);
       if (user.email) {
         const userMailOptions = {
-          from: `"Notervo" <${process.env.EMAIL_USER}>`,
+          from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
           to: user.email,
           subject: `Order Confirmation #${displayOrderId}`,
           html: getOrderConfirmationHTML(user, savedOrder, finalCoupon, discountValue),
@@ -281,7 +281,7 @@ exports.createOrder = async (req, res) => {
       }
 
       const ownerMailOptions = {
-        from: `"Notervo" <${process.env.EMAIL_USER}>`,
+        from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
         to: process.env.EMAIL_USER,
         subject: `New Order Received #${displayOrderId}`,
         html: getNewOrderNotificationHTML(user, savedOrder, finalCoupon, discountValue),
@@ -454,7 +454,7 @@ exports.updateOrderStatus = async (req, res) => {
       if (user && user.email) {
         const statusEmail = getOrderStatusEmailTemplate(user, order, previousState, state);
         const statusMailOptions = {
-          from: `"Notervo" <${process.env.EMAIL_USER}>`,
+          from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
           to: user.email,
           subject: statusEmail.subject,
           html: statusEmail.html,

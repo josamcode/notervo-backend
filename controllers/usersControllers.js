@@ -162,7 +162,7 @@ exports.createUser = async (req, res) => {
       try {
         const verificationUrl = `${process.env.BASE_URL || req.protocol + '://' + req.get('host')}/api/auth/verify-email?token=${result.verificationToken}`;
         const mailOptions = {
-          from: `"Notervo" <${process.env.EMAIL_USER}>`,
+          from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
           to: result.email,
           subject: 'Verify Your Email Address',
           html: getVerificationEmailHTML(result.username, verificationUrl),
