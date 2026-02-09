@@ -313,8 +313,8 @@ exports.getOrders = async (req, res) => {
 
     if (!orders.length) {
       return res
-        .status(404)
-        .json({ status: "empty", message: "You have no orders yet." });
+        .status(200)
+        .json({ status: "empty", length: 0, orders: [], message: "You have no orders yet." });
     }
     res.json({ status: "success", length: orders.length, orders });
   } catch (err) {
