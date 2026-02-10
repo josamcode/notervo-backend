@@ -21,17 +21,20 @@ const PORT = process.env.PORT || 3000;
 
 app.use("/api/public", express.static("public"));
 
-app.use(
-  cors({
-    origin: "*",
-    credentials: true,
-  })
-);
+const isProduction = process.env.NODE_ENV === "production";
+const allowedOrigins = isProduction
+  ? ["https://notervoadmin.vercel.app", "https://notervo.vercel.app"]
+  : ["http://localhost:3000", "http://localhost:3001"];
 
 const corsOptions = {
-  origin: '*',
+  origin: (origin, callback) => {
+    // Allow non-browser requests with no Origin header.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
