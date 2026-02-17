@@ -22,11 +22,25 @@ function verifyToken(req, res, next) {
   }
 }
 
-function isAdmin(req, res, next) {
-  if (req.user.role === "admin") {
+function optionalVerifyToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) {
+    return next();
+  }
+
+  const token = authHeader.split(" ")[1]; // Bearer <token>
+  if (!token) {
+    return res
+      .status(401)
+      .json({ message: "Access denied. Invalid token format." });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // { id, role }
     next();
-  } else {
-    res.status(403).json({ message: "Forbidden. Admins only." });
+  } catch (err) {
+    res.status(401).json({ message: "Invalid or expired token." });
   }
 }
 
@@ -49,6 +63,7 @@ function isUserOrAdmin(req, res, next) {
 
 module.exports = {
   verifyToken,
+  optionalVerifyToken,
   isAdmin,
   isUserOrAdmin,
 };

@@ -133,8 +133,9 @@ function upsertUserShippingAddress(user, shippingAddress, setAsDefault = false) 
 
 exports.createOrder = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate('cart');
-    if (!user) {
+    const userId = req.user?.id || null;
+    const user = userId ? await User.findById(userId).populate("cart") : null;
+    if (userId && !user) {
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -197,7 +198,7 @@ exports.createOrder = async (req, res) => {
           message: `Coupon requires minimum cart value of ${coupon.minCartValue} EGP`,
         });
       }
-      if (coupon.usedBy.includes(user._id)) {
+      if (user && coupon.usedBy.includes(user._id)) {
         return res.status(400).json({ message: "Coupon already used by you" });
       }
       if (coupon.type === "percent") {
@@ -210,7 +211,7 @@ exports.createOrder = async (req, res) => {
     }
 
     const newOrder = new Orders({
-      userId: req.user.id,
+      userId: user?._id || null,
       couponCode: finalCoupon,
       paymentMethod: paymentMethod || "CashOnDelivery",
       shippingAddress: normalizedShippingAddress,
@@ -220,71 +221,79 @@ exports.createOrder = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    const hasOrderReference = user.orders.some(
-      (orderId) => orderId.toString() === savedOrder._id.toString()
-    );
-
-    let shouldSaveUser = false;
-    if (!hasOrderReference) {
-      user.orders.push(savedOrder._id);
-      shouldSaveUser = true;
-    }
-
-    const shouldPersistShippingAddress =
-      saveShippingAddress === true || saveShippingAddress === "true";
-    const shouldSetDefaultAddress =
-      setDefaultShippingAddress === true || setDefaultShippingAddress === "true";
-
-    if (shouldPersistShippingAddress) {
-      const addressWasSaved = upsertUserShippingAddress(
-        user,
-        normalizedShippingAddress,
-        shouldSetDefaultAddress
+    if (user) {
+      const hasOrderReference = user.orders.some(
+        (orderId) => orderId.toString() === savedOrder._id.toString()
       );
-      if (addressWasSaved) {
+
+      let shouldSaveUser = false;
+      if (!hasOrderReference) {
+        user.orders.push(savedOrder._id);
         shouldSaveUser = true;
       }
-    }
 
-    if (shouldSaveUser) {
-      await user.save();
-    }
+      const shouldPersistShippingAddress =
+        saveShippingAddress === true || saveShippingAddress === "true";
+      const shouldSetDefaultAddress =
+        setDefaultShippingAddress === true || setDefaultShippingAddress === "true";
 
-    const cart = await Cart.findById(user.cart);
-    if (cart) {
-      cart.items = cart.items.filter(
-        (cartItem) =>
-          !items.some(
-            (orderedItem) =>
-              orderedItem.productId === cartItem.productId.toString() &&
-              orderedItem.color === cartItem.color &&
-              orderedItem.size === cartItem.size
-          )
-      );
-      cart.total = await calculateCartTotal(cart);
-      await cart.save();
+      if (shouldPersistShippingAddress) {
+        const addressWasSaved = upsertUserShippingAddress(
+          user,
+          normalizedShippingAddress,
+          shouldSetDefaultAddress
+        );
+        if (addressWasSaved) {
+          shouldSaveUser = true;
+        }
+      }
+
+      if (shouldSaveUser) {
+        await user.save();
+      }
+
+      const cart = await Cart.findById(user.cart);
+      if (cart) {
+        cart.items = cart.items.filter(
+          (cartItem) =>
+            !items.some(
+              (orderedItem) =>
+                orderedItem.productId === cartItem.productId.toString() &&
+                orderedItem.color === cartItem.color &&
+                orderedItem.size === cartItem.size
+            )
+        );
+        cart.total = await calculateCartTotal(cart);
+        await cart.save();
+      }
     }
 
     try {
       const displayOrderId = getOrderDisplayId(savedOrder);
-      if (user.email) {
+      const customerProfile = user || {
+        username: normalizedShippingAddress.fullName || "Guest Customer",
+        email: "",
+        phone: normalizedShippingAddress.phone || "",
+      };
+
+      if (customerProfile.email) {
         const userMailOptions = {
           from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
-          to: user.email,
+          to: customerProfile.email,
           subject: `Order Confirmation #${displayOrderId}`,
-          html: getOrderConfirmationHTML(user, savedOrder, finalCoupon, discountValue),
+          html: getOrderConfirmationHTML(customerProfile, savedOrder, finalCoupon, discountValue),
         };
         await transporter.sendMail(userMailOptions);
-        console.log(`Order confirmation email sent to user: ${user.email}`);
+        console.log(`Order confirmation email sent to user: ${customerProfile.email}`);
       } else {
-        console.warn(`User ${user._id} does not have an email address. Order confirmation email was not sent.`);
+        console.warn(`Order ${displayOrderId} has no customer email. Confirmation email was not sent.`);
       }
 
       const ownerMailOptions = {
         from: process.env.EMAIL_FROM || `"Notervo" <${process.env.EMAIL_USER}>`,
         to: process.env.EMAIL_USER,
         subject: `New Order Received #${displayOrderId}`,
-        html: getNewOrderNotificationHTML(user, savedOrder, finalCoupon, discountValue),
+        html: getNewOrderNotificationHTML(customerProfile, savedOrder, finalCoupon, discountValue),
       };
       await transporter.sendMail(ownerMailOptions);
       console.log(`New order notification email sent to owner: ${process.env.EMAIL_USER}`);
@@ -390,6 +399,26 @@ exports.getOrderById = async (req, res) => {
         .json({ status: "not_found", message: "Order not found." });
     }
 
+    const requester = req.user || null;
+    const isAdmin = requester?.role === "admin";
+    const orderOwnerId = order.userId ? order.userId.toString() : null;
+
+    if (orderOwnerId) {
+      if (!requester) {
+        return res.status(401).json({
+          status: "auth_required",
+          message: "Login is required to view this order.",
+        });
+      }
+
+      if (!isAdmin && requester.id !== orderOwnerId) {
+        return res.status(403).json({
+          status: "forbidden",
+          message: "You are not authorized to view this order.",
+        });
+      }
+    }
+
     await ensureOrderNumber(order);
 
     res.json({
@@ -410,7 +439,7 @@ exports.updateShipping = async (req, res) => {
     const order = await Orders.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.userId.toString() !== req.user.id) {
+    if (!order.userId || order.userId.toString() !== req.user.id) {
       return res
         .status(403)
         .json({ message: "You are not allowed to edit this order" });
@@ -487,9 +516,11 @@ exports.deleteOrder = async (req, res) => {
     }
 
     await order.deleteOne();
-    await User.findByIdAndUpdate(order.userId, {
-      $pull: { orders: order._id },
-    });
+    if (order.userId) {
+      await User.findByIdAndUpdate(order.userId, {
+        $pull: { orders: order._id },
+      });
+    }
 
     res.json({ message: "Order deleted successfully" });
   } catch (err) {
