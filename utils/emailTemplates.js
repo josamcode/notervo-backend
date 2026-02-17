@@ -51,7 +51,7 @@ const baseLayout = (title, body) => `
   <!-- Outer wrapper -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${brand.surface};">
     <tr>
-      <td align="center" style="padding:40px 16px;">
+      <td align="center" style="padding:40px 5px;">
 
         <!-- Card -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background-color:${brand.white};border-radius:${brand.radius};border:1px solid ${brand.border};overflow:hidden;">

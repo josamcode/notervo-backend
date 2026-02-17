@@ -81,7 +81,7 @@ const baseLayout = (title, headerTitle, headerSubtitle, body, footerNote) => `
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${brand.surface};">
     <tr>
-      <td align="center" style="padding:40px 16px;">
+      <td align="center" style="padding:40px 5px;">
 
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background-color:${brand.white};border-radius:${brand.radius};border:1px solid ${brand.border};overflow:hidden;">
 
